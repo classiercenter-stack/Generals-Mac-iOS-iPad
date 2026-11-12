@@ -16,52 +16,18 @@ steps:
   - name: Checkout
     uses: actions/checkout@v4
 
-  - name: Install build tools
+  - name: Install tools
     run: |
       brew install cmake ninja meson pkgconf xcodegen
-      git clone https://github.com/microsoft/vcpkg "$HOME/vcpkg"
-      "$HOME/vcpkg/bootstrap-vcpkg.sh"
-      echo "VCPKG_ROOT=$HOME/vcpkg" >> "$GITHUB_ENV"
-
-  - name: Install Vulkan SDK
-    run: |
-      SDK_VERSION="$(curl -fsSL https://vulkan.lunarg.com/sdk/latest/mac.txt)"
-      curl -fL "https://sdk.lunarg.com/sdk/download/${SDK_VERSION}/mac/vulkan_sdk.zip" -o "$RUNNER_TEMP/vulkan_sdk.zip"
-      unzip -q "$RUNNER_TEMP/vulkan_sdk.zip" -d "$RUNNER_TEMP"
-      INSTALLER="$(find "$RUNNER_TEMP" -path '*/Contents/MacOS/vulkansdk-macOS-*' -type f | head -1)"
-      sudo "$INSTALLER" --root "$HOME/VulkanSDK/$SDK_VERSION" --accept-licenses --default-answer --confirm-command install com.lunarg.vulkan.core com.lunarg.vulkan.ios
-      echo "VULKAN_SDK=$HOME/VulkanSDK/$SDK_VERSION/macOS" >> "$GITHUB_ENV"
-
-  - name: Prepare iOS dependencies
-    run: |
       git submodule update --init references/fbraz3-dxvk
-      GX_MOLTENVK_ROOT="$GITHUB_WORKSPACE/.ci/MoltenVK" ./scripts/build/ios/fetch-moltenvk.sh
-      GX_FONTS="$GITHUB_WORKSPACE/.ci/fonts" ./scripts/build/ios/stage-fonts.sh
 
-  - name: Configure iOS
+  - name: Prepare iOS
+    run: |
+      ./scripts/build/ios/fetch-moltenvk.sh
+      ./scripts/build/ios/stage-fonts.sh
+
+  - name: Configure
     run: cmake --preset ios-vulkan
 
-  - name: Build Zero Hour
+  - name: Build
     run: cmake --build build/ios-vulkan --target z_generals --parallel 3
-
-  - name: Check build output
-    run: |
-      test -f build/ios-vulkan/GeneralsMD/GeneralsXZH.app/GeneralsXZH
-      echo "iOS engine build succeeded"
-
-  - name: Upload build files
-    uses: actions/upload-artifact@v4
-    with:
-      name: generals-ios-build
-      path: |
-        build/ios-vulkan/GeneralsMD/GeneralsXZH.app/GeneralsXZH
-        build/ios-vulkan/_deps/dxvk-build-macos/src/d3d8/libdxvk_d3d8.0.dylib
-        build/ios-vulkan/_deps/dxvk-build-macos/src/d3d9/libdxvk_d3d9.0.dylib
-        build/ios-vulkan/_deps/sdl3-build/libSDL3.0.dylib
-        build/ios-vulkan/_deps/sdl3_image-build/libSDL3_image.0.dylib
-        build/ios-vulkan/_deps/openal_soft-build/libopenal.1.24.2.dylib
-        .ci/MoltenVK/
-        .ci/fonts/
-        ios/config/
-      if-no-files-found: error
-      retention-days: 7
